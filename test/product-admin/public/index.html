@@ -104,7 +104,8 @@
   <h1>상품 관리</h1>
   <span class="count" id="count"></span>
   <span class="spacer"></span>
-  <button class="primary" id="btnAdd">+ 상품 추가</button>
+  <button id="btnAuth" hidden>로그인</button>
+  <button class="primary" id="btnAdd" hidden>+ 상품 추가</button>
 </header>
 
 <main>
@@ -161,6 +162,22 @@
   </form>
 </dialog>
 
+<!-- 로그인 -->
+<dialog id="loginDlg" style="width:min(360px, calc(100% - 32px))">
+  <form id="loginForm" method="dialog">
+    <div class="dlg-head">관리자 로그인</div>
+    <div class="dlg-body">
+      <label>비밀번호</label>
+      <input id="password" type="password" required autocomplete="current-password">
+      <p class="reason" style="margin:8px 0 0">로그인하면 상품을 추가 · 삭제할 수 있습니다.</p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" id="btnLoginCancel">취소</button>
+      <button type="submit" class="primary" id="btnLogin">로그인</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -168,6 +185,7 @@
 let products = [];
 let selected = null;
 const excluded = new Set(); // 제외할 알레르기 물질
+let auth = { loggedIn: false, canLogin: false }; // 로그인해야 추가 · 삭제 가능
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -184,8 +202,46 @@ function toast(msg, isError) {
 async function api(method, url, body) {
   const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const data = await res.json().catch(() => ({}));
+  // 로그인이 만료된 경우 화면도 로그아웃 상태로 바꿈
+  if (res.status === 401 && auth.loggedIn) { auth.loggedIn = false; renderAuth(); }
   if (!res.ok) throw new Error(data.error || `오류 (${res.status})`);
   return data;
+}
+
+// ── 로그인 ──
+function renderAuth() {
+  $('#btnAuth').hidden = !auth.canLogin;
+  $('#btnAuth').textContent = auth.loggedIn ? '로그아웃' : '로그인';
+  $('#btnAdd').hidden = !auth.loggedIn;
+  if (!products.length) return; // 목록을 불러오기 전에는 다시 그리지 않음
+  if (selected) openDrawer(selected); else render();
+}
+
+async function loadSession() {
+  try { auth = await api('GET', '/api/session'); } catch { auth = { loggedIn: false, canLogin: false }; }
+  renderAuth();
+}
+
+async function login(e) {
+  e.preventDefault();
+  $('#btnLogin').disabled = true;
+  try {
+    auth = { ...auth, ...(await api('POST', '/api/session', { password: $('#password').value })) };
+    $('#loginDlg').close();
+    toast('로그인했습니다');
+    renderAuth();
+  } catch (err) { toast(err.message, true); }
+  finally { $('#btnLogin').disabled = false; $('#password').value = ''; }
+}
+
+async function toggleAuth() {
+  if (!auth.loggedIn) { $('#loginForm').reset(); return $('#loginDlg').showModal(); }
+  try {
+    await api('DELETE', '/api/session');
+    auth.loggedIn = false;
+    toast('로그아웃했습니다');
+    renderAuth();
+  } catch (err) { toast(err.message, true); }
 }
 
 // ── 불러오기 ──
@@ -255,7 +311,7 @@ function render() {
       <td class="hide-sm">${esc([p.volume, p.pieces].filter(Boolean).join(' · '))}</td>
       <td class="num">${won(p.price)}</td>
       <td>${allergenBadges(p)}</td>
-      <td><button class="danger" data-del="${esc(p.code)}" title="삭제">삭제</button></td>
+      <td>${auth.loggedIn ? `<button class="danger" data-del="${esc(p.code)}" title="삭제">삭제</button>` : ''}</td>
     </tr>`).join('') : '<tr><td colspan="8" class="empty">조건에 맞는 상품이 없습니다</td></tr>';
 }
 
@@ -276,7 +332,7 @@ function openDrawer(code) {
   d.innerHTML = `
     <div class="drawer-head">
       <div style="flex:1"><div class="code">${esc(p.code)}</div><h2>${esc(p.name)}</h2></div>
-      <button data-del="${esc(p.code)}" class="danger">삭제</button>
+      ${auth.loggedIn ? `<button data-del="${esc(p.code)}" class="danger">삭제</button>` : ''}
       <button id="btnClose" aria-label="닫기">✕</button>
     </div>
     <section><dl class="kv">
@@ -390,12 +446,16 @@ document.addEventListener('click', e => {
   const tr = e.target.closest('tbody tr[data-code]');
   if (tr) openDrawer(tr.dataset.code);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#dlg').open) closeDrawer(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#dlg').open && !$('#loginDlg').open) closeDrawer(); });
 $('#btnAdd').addEventListener('click', openForm);
 $('#btnCancel').addEventListener('click', () => $('#dlg').close());
 $('#form').addEventListener('submit', save);
+$('#btnAuth').addEventListener('click', toggleAuth);
+$('#btnLoginCancel').addEventListener('click', () => $('#loginDlg').close());
+$('#loginForm').addEventListener('submit', login);
 
 load();
+if (location.protocol !== 'file:') loadSession();
 </script>
 </body>
 </html>
