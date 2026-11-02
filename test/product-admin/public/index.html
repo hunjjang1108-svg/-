@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>상품 관리</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #fff; --text: #1d2330; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2f6fde; --accent-soft: #e8f0fd; --danger: #c62828; --danger-soft: #fdecec;
+    --warn: #a15c00; --warn-soft: #fff4e0; --ok: #1b7f4a; --ok-soft: #e6f5ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --surface: #1b2029; --text: #e7e9ee; --muted: #9aa3b2; --line: #2c3340;
+      --accent: #6b9cff; --accent-soft: #1f2b44; --danger: #ff7b7b; --danger-soft: #3a1f22;
+      --warn: #ffb74d; --warn-soft: #3a2c16; --ok: #6fd39b; --ok-soft: #173326;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .count { color: var(--muted); }
+  header .spacer { flex: 1; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 24px 60px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); padding: 7px 14px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); border-color: transparent; background: transparent; padding: 4px 8px; }
+  button.danger:hover { background: var(--danger-soft); }
+  button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+  .filters { display: grid; grid-template-columns: 2fr 1fr 1.4fr; gap: 10px; margin-bottom: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 14px; color: var(--muted); font-size: 13px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); cursor: pointer; user-select: none; }
+  .chip.on { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: var(--bg); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--accent-soft); }
+  tbody tr.selected { background: var(--accent-soft); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .code { font-family: Consolas, monospace; color: var(--muted); white-space: nowrap; }
+  button.danger { white-space: nowrap; }
+  .badge { white-space: nowrap; display: inline-block; font-size: 12px; border-radius: 6px; padding: 1px 7px; margin: 1px 2px 1px 0; }
+  .b-cat { background: var(--accent-soft); color: var(--accent); }
+  .b-contain { background: var(--danger-soft); color: var(--danger); }
+  .b-line { background: var(--warn-soft); color: var(--warn); }
+  .b-free { background: var(--ok-soft); color: var(--ok); }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+  /* 상세 패널 */
+  .drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(460px, 100%); background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.08); transform: translateX(100%); transition: transform .2s; z-index: 10; overflow-y: auto; }
+  .drawer.open { transform: none; }
+  .drawer-head { display: flex; align-items: start; gap: 8px; padding: 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+  .drawer-head h2 { margin: 0; font-size: 18px; flex: 1; }
+  .drawer section { padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .drawer h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .list { margin: 0; padding: 0; list-style: none; }
+  .list li { padding: 4px 0; }
+  .lv-금지 { color: var(--danger); font-weight: 700; }
+  .lv-주의 { color: var(--warn); font-weight: 600; }
+  .lv-안내 { color: var(--muted); }
+  .reason { color: var(--muted); font-size: 12px; }
+
+  /* 추가 폼 */
+  dialog { border: none; border-radius: 14px; padding: 0; width: min(760px, calc(100% - 32px)); background: var(--surface); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-head { padding: 18px 22px; border-bottom: 1px solid var(--line); font-size: 17px; font-weight: 700; }
+  .dlg-body { padding: 16px 22px; max-height: 70vh; overflow-y: auto; }
+  .dlg-foot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 12px; }
+  .grid .wide { grid-column: span 3; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  label .req { color: var(--danger); }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 14px 0 0; padding: 10px 12px 12px; }
+  legend { font-size: 13px; font-weight: 600; padding: 0 6px; }
+  .rows .row { display: grid; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .rows .row button { padding: 4px 8px; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--danger); color: #fff; }
+  .banner { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+
+  @media (max-width: 720px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    .filters { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; } .grid .wide { grid-column: auto; }
+    .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>상품 관리</h1>
+  <span class="count" id="count"></span>
+  <span class="spacer"></span>
+  <button class="primary" id="btnAdd">+ 상품 추가</button>
+</header>
+
+<main>
+  <div id="banner"></div>
+  <div class="filters">
+    <input id="q" type="search" placeholder="상품명 · 코드 · 원재료 · 특징 검색">
+    <select id="fCategory"><option value="">전체 분류</option><option>신선</option><option>가공</option><option>냉동</option></select>
+    <select id="fGuide"><option value="">안내사항 전체</option><option value="금지">금지 사항 있는 상품</option><option value="주의">주의 사항 있는 상품</option></select>
+  </div>
+  <div class="chips" id="allergenChips"></div>
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>코드</th><th>상품명</th><th>분류</th><th class="hide-sm">원산지</th><th class="hide-sm">용량</th>
+        <th style="text-align:right">가격</th><th>알레르기</th><th></th>
+      </tr></thead>
+      <tbody id="rows"><tr><td colspan="8" class="empty">불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- 상세 패널 -->
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<!-- 추가 폼 -->
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <div class="dlg-head">상품 추가</div>
+    <div class="dlg-body">
+      <div class="grid">
+        <div><label>상품코드 <span class="req">*</span></label><input name="code" required pattern="P-[0-9]{4}" placeholder="P-0500"></div>
+        <div class="wide" style="grid-column: span 2"><label>상품명 <span class="req">*</span></label><input name="name" required></div>
+        <div><label>대분류</label><select name="category"><option value=""></option><option>신선</option><option>가공</option><option>냉동</option></select></div>
+        <div><label>소분류</label><input name="subcategory" placeholder="과일, 건조 과자 …"></div>
+        <div><label>가격(원) <span class="req">*</span></label><input name="price" type="number" min="0" step="1" required></div>
+        <div><label>원산지(시·도)</label><input name="origin_region" placeholder="대구, 경북 …"></div>
+        <div><label>원산지(지역)</label><input name="origin_area"></div>
+        <div><label>용량 <span class="req">*</span></label><input name="volume" required placeholder="500g"></div>
+        <div><label>구성</label><input name="pieces" placeholder="10개"></div>
+        <div><label>판매 기간</label><input name="sale_period" placeholder="4~7월"></div>
+        <div><label>알레르기 정보</label><select name="allergen_status"><option value=""></option><option>없음(문서 명시)</option></select></div>
+        <div class="wide"><label>특징</label><input name="description"></div>
+      </div>
+
+      <fieldset><legend>원재료</legend><div class="rows" id="r-ingredients"></div><button type="button" class="link" data-add="ingredients">+ 원재료 추가</button></fieldset>
+      <fieldset><legend>보관</legend><div class="rows" id="r-storage"></div><button type="button" class="link" data-add="storage">+ 보관 조건 추가</button></fieldset>
+      <fieldset><legend>알레르기</legend><div class="rows" id="r-allergens"></div><button type="button" class="link" data-add="allergens">+ 알레르기 추가</button></fieldset>
+      <fieldset><legend>안내사항 (금지 · 주의 · 안내)</legend><div class="rows" id="r-guides"></div><button type="button" class="link" data-add="guides">+ 안내사항 추가</button></fieldset>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" id="btnCancel">취소</button>
+      <button type="submit" class="primary" id="btnSave">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 상태 ──
+let products = [];
+let selected = null;
+const excluded = new Set(); // 제외할 알레르기 물질
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const won = n => (n == null ? '' : Number(n).toLocaleString('ko-KR') + '원');
+
+function toast(msg, isError) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (t.className = 'toast'), 2500);
+}
+
+async function api(method, url, body) {
+  const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `오류 (${res.status})`);
+  return data;
+}
+
+// ── 불러오기 ──
+async function load() {
+  // 파일을 더블클릭해 연 경우(file://)에는 서버 API를 쓸 수 없음
+  if (location.protocol === 'file:') {
+    $('#banner').innerHTML = '<div class="banner">이 파일은 직접 열면 동작하지 않습니다. 터미널에서 <b>node server.js</b>를 실행한 뒤 브라우저에서 <b>http://localhost:3000</b> 으로 접속하세요.</div>';
+    $('#rows').innerHTML = '<tr><td colspan="8" class="empty">서버 주소로 접속해 주세요</td></tr>';
+    return;
+  }
+  try {
+    products = await api('GET', '/api/products');
+    $('#banner').innerHTML = '';
+    renderChips();
+    render();
+    if (selected) openDrawer(selected);
+  } catch (e) {
+    $('#banner').innerHTML = `<div class="banner">${esc(e.message)}</div>`;
+    $('#rows').innerHTML = '<tr><td colspan="8" class="empty">데이터를 불러오지 못했습니다</td></tr>';
+  }
+}
+
+// 알레르기 성분 · 라인 공유만 (미함유 표기 · 미확인 제외)
+const realAllergens = p => (p.product_allergens || []).filter(a => a.type !== '미함유 표기' && a.allergen.trim() !== '미확인');
+
+function renderChips() {
+  const all = [...new Set(products.flatMap(p => realAllergens(p).map(a => a.allergen)))].sort();
+  $('#allergenChips').innerHTML = all.length
+    ? '알레르기 제외: ' + all.map(a => `<span class="chip ${excluded.has(a) ? 'on' : ''}" data-allergen="${esc(a)}">${esc(a)}</span>`).join('')
+    : '';
+}
+
+// ── 목록 ──
+function filtered() {
+  const q = $('#q').value.trim().toLowerCase();
+  const cat = $('#fCategory').value;
+  const guide = $('#fGuide').value;
+  return products.filter(p => {
+    if (cat && p.category !== cat) return false;
+    if (guide && !(p.product_guides || []).some(g => g.level === guide)) return false;
+    if (realAllergens(p).some(a => excluded.has(a.allergen))) return false;
+    if (!q) return true;
+    const hay = [p.code, p.name, p.subcategory, p.origin_region, p.origin_area, p.description,
+      ...(p.product_ingredients || []).map(i => i.name), ...(p.product_allergens || []).map(a => a.allergen)]
+      .join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function allergenBadges(p) {
+  return (p.product_allergens || []).map(a => {
+    const cls = a.type === '성분 함유' ? 'b-contain' : a.type === '생산 라인 공유' ? 'b-line' : 'b-free';
+    const label = a.type === '생산 라인 공유' ? `${a.allergen}(라인)` : a.type === '미함유 표기' ? `${a.allergen} 없음` : a.allergen;
+    return `<span class="badge ${cls}" title="${esc(a.type)}">${esc(label)}</span>`;
+  }).join('') || (p.allergen_status === '없음(문서 명시)' ? '<span class="badge b-free">없음</span>' : '');
+}
+
+function render() {
+  const list = filtered();
+  $('#count').textContent = `${list.length} / ${products.length}건`;
+  $('#rows').innerHTML = list.length ? list.map(p => `
+    <tr data-code="${esc(p.code)}" class="${selected === p.code ? 'selected' : ''}">
+      <td class="code">${esc(p.code)}</td>
+      <td><strong>${esc(p.name)}</strong></td>
+      <td>${p.category ? `<span class="badge b-cat">${esc(p.category)}</span>` : ''} <span class="hide-sm" style="color:var(--muted)">${esc(p.subcategory)}</span></td>
+      <td class="hide-sm">${esc([p.origin_region, p.origin_area].filter(Boolean).join(' '))}</td>
+      <td class="hide-sm">${esc([p.volume, p.pieces].filter(Boolean).join(' · '))}</td>
+      <td class="num">${won(p.price)}</td>
+      <td>${allergenBadges(p)}</td>
+      <td><button class="danger" data-del="${esc(p.code)}" title="삭제">삭제</button></td>
+    </tr>`).join('') : '<tr><td colspan="8" class="empty">조건에 맞는 상품이 없습니다</td></tr>';
+}
+
+// ── 상세 ──
+function openDrawer(code) {
+  const p = products.find(x => x.code === code);
+  if (!p) return closeDrawer();
+  selected = code;
+  const d = $('#drawer');
+  const storage = (p.product_storage || []).map(s =>
+    `<li><strong>${esc(s.condition)}</strong> · ${esc(s.place || '장소 미기재')} ${s.duration != null ? esc(s.duration + s.unit) : ''} ${s.note ? `<div class="reason">${esc(s.note)}</div>` : ''}</li>`).join('');
+  const order = { 금지: 0, 주의: 1, 안내: 2 };
+  const guides = [...(p.product_guides || [])].sort((a, b) => order[a.level] - order[b.level]).map(g =>
+    `<li><span class="lv-${esc(g.level)}">[${esc(g.area)} ${esc(g.level)}]</span> ${esc(g.content)} ${g.reason ? `<div class="reason">이유: ${esc(g.reason)}</div>` : ''}</li>`).join('');
+  const ingredients = (p.product_ingredients || []).map(i =>
+    `<li>${esc(i.name)} ${i.note ? `<span class="reason">(${esc(i.note)})</span>` : ''} ${i.origin ? `<span class="reason">· ${esc(i.origin)}</span>` : ''}</li>`).join('');
+
+  d.innerHTML = `
+    <div class="drawer-head">
+      <div style="flex:1"><div class="code">${esc(p.code)}</div><h2>${esc(p.name)}</h2></div>
+      <button data-del="${esc(p.code)}" class="danger">삭제</button>
+      <button id="btnClose" aria-label="닫기">✕</button>
+    </div>
+    <section><dl class="kv">
+      <dt>분류</dt><dd>${esc([p.category, p.subcategory].filter(Boolean).join(' / ')) || '—'}</dd>
+      <dt>가격</dt><dd>${won(p.price)}</dd>
+      <dt>용량</dt><dd>${esc([p.volume, p.pieces].filter(Boolean).join(' · '))}</dd>
+      <dt>원산지</dt><dd>${esc([p.origin_region, p.origin_area].filter(Boolean).join(' ')) || '—'}</dd>
+      ${p.sale_period ? `<dt>판매 기간</dt><dd>${esc(p.sale_period)}</dd>` : ''}
+      ${p.description ? `<dt>특징</dt><dd>${esc(p.description)}</dd>` : ''}
+    </dl></section>
+    <section><h3>알레르기</h3>${allergenBadges(p) || '<span class="reason">정보 없음</span>'}</section>
+    <section><h3>원재료</h3><ul class="list">${ingredients || '<li class="reason">정보 없음</li>'}</ul></section>
+    <section><h3>보관</h3><ul class="list">${storage || '<li class="reason">정보 없음</li>'}</ul></section>
+    <section><h3>안내사항</h3><ul class="list">${guides || '<li class="reason">없음</li>'}</ul></section>`;
+  d.classList.add('open');
+  d.setAttribute('aria-hidden', 'false');
+  render();
+}
+
+function closeDrawer() {
+  selected = null;
+  $('#drawer').classList.remove('open');
+  $('#drawer').setAttribute('aria-hidden', 'true');
+  render();
+}
+
+// ── 삭제 ──
+async function remove(code) {
+  const p = products.find(x => x.code === code);
+  if (!confirm(`${code} ${p ? p.name : ''} 상품을 삭제할까요?\n원재료 · 보관 · 알레르기 · 안내사항도 함께 삭제되며 되돌릴 수 없습니다.`)) return;
+  try {
+    await api('DELETE', `/api/products/${encodeURIComponent(code)}`);
+    if (selected === code) closeDrawer();
+    toast(`${code} 삭제했습니다`);
+    load();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ── 추가 폼: 반복 행 ──
+const ROW_DEFS = {
+  ingredients: { cols: '2fr 1.2fr 1.4fr auto', html: () =>
+    `<input data-k="name" placeholder="원재료"><input data-k="note" placeholder="비율 · 비고"><input data-k="origin" placeholder="원산지">` },
+  storage: { cols: '1fr 1fr .7fr .8fr 1.6fr auto', html: () =>
+    `<select data-k="condition"><option>수령 후</option><option>개봉 전</option><option>개봉 후</option></select>
+     <select data-k="place"><option value="">장소</option><option>상온</option><option>실온</option><option>냉장</option><option>냉동</option><option>서늘한 곳</option></select>
+     <input data-k="duration" type="number" min="0" placeholder="기간">
+     <select data-k="unit"><option value="">단위</option><option>일</option><option>주</option><option>개월</option></select>
+     <input data-k="note" placeholder="비고">` },
+  allergens: { cols: '1.5fr 1.5fr auto', html: () =>
+    `<input data-k="allergen" placeholder="물질 (예: 견과류)">
+     <select data-k="type"><option>성분 함유</option><option>생산 라인 공유</option><option>미함유 표기</option></select>` },
+  guides: { cols: '.8fr .8fr 2.4fr 1.4fr auto', html: () =>
+    `<select data-k="area"><option>보관</option><option>섭취</option><option>조리</option><option>사용</option><option>품질</option></select>
+     <select data-k="level"><option>금지</option><option>주의</option><option>안내</option></select>
+     <input data-k="content" placeholder="내용"><input data-k="reason" placeholder="이유">` },
+};
+
+function addRow(kind) {
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.style.gridTemplateColumns = ROW_DEFS[kind].cols;
+  div.innerHTML = ROW_DEFS[kind].html() + '<button type="button" class="danger" data-rm title="행 삭제">✕</button>';
+  $(`#r-${kind}`).appendChild(div);
+}
+
+const rowValues = kind => [...document.querySelectorAll(`#r-${kind} .row`)].map(r =>
+  Object.fromEntries([...r.querySelectorAll('[data-k]')].map(el => [el.dataset.k, el.value])));
+
+function openForm() {
+  $('#form').reset();
+  Object.keys(ROW_DEFS).forEach(k => ($(`#r-${k}`).innerHTML = ''));
+  $('#dlg').showModal();
+}
+
+async function save(e) {
+  e.preventDefault();
+  const form = $('#form');
+  if (!form.reportValidity()) return;
+  const product = Object.fromEntries(new FormData(form));
+  if (products.some(p => p.code === product.code)) return toast(`${product.code}는 이미 있는 상품코드입니다`, true);
+  $('#btnSave').disabled = true;
+  try {
+    await api('POST', '/api/products', {
+      product, ingredients: rowValues('ingredients'), storage: rowValues('storage'),
+      allergens: rowValues('allergens'), guides: rowValues('guides'),
+    });
+    $('#dlg').close();
+    toast(`${product.code} ${product.name} 추가했습니다`);
+    selected = product.code;
+    load();
+  } catch (err) { toast(err.message, true); }
+  finally { $('#btnSave').disabled = false; }
+}
+
+// ── 이벤트 ──
+$('#q').addEventListener('input', render);
+$('#fCategory').addEventListener('change', render);
+$('#fGuide').addEventListener('change', render);
+$('#allergenChips').addEventListener('click', e => {
+  const a = e.target.dataset.allergen;
+  if (!a) return;
+  excluded.has(a) ? excluded.delete(a) : excluded.add(a);
+  renderChips(); render();
+});
+document.addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if (del) { e.stopPropagation(); return remove(del.dataset.del); }
+  if (e.target.closest('#btnClose')) return closeDrawer();
+  if (e.target.matches('[data-rm]')) return e.target.parentElement.remove();
+  if (e.target.dataset.add) return addRow(e.target.dataset.add);
+  const tr = e.target.closest('tbody tr[data-code]');
+  if (tr) openDrawer(tr.dataset.code);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#dlg').open) closeDrawer(); });
+$('#btnAdd').addEventListener('click', openForm);
+$('#btnCancel').addEventListener('click', () => $('#dlg').close());
+$('#form').addEventListener('submit', save);
+
+load();
+</script>
+</body>
+</html>
